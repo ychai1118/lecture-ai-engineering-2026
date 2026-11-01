@@ -25,24 +25,39 @@ def ask(question: str) -> str:
     client = genai.Client(api_key=get_api_key())
     response = client.models.generate_content(model=MODEL, contents=question)
 
-    # TODO(第1回 演習): response.usage_metadata から
-    #   入力トークン数と出力トークン数を表示してみよう（Copilotに頼んでよい）
+    usage = response.usage_metadata
+    if usage is not None:
+        print(
+            f"[トークン数] 入力: {usage.prompt_token_count}, "
+            f"出力: {usage.candidates_token_count}"
+        )
 
     return response.text
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="素のLLMに質問する")
-    parser.add_argument("question", nargs="?", default=DEFAULT_QUESTION)
-    args = parser.parse_args()
+    client = genai.Client(api_key=get_api_key())
+    chat = client.chats.create(model=MODEL)
 
     print(f"[model] {MODEL}")
-    print(f"[質問] {args.question}\n")
-    try:
-        print(ask(args.question))
-    except errors.APIError as e:
-        print(api_error_message(e.code, e.message))
-        raise SystemExit(1)
+    print("終了するには空の質問を入力してください。")
+
+    while True:
+        question = input("\n[質問] ")
+        if not question.strip():
+            break
+
+        try:
+            response = chat.send_message(question)
+            usage = response.usage_metadata
+            if usage is not None:
+                print(
+                    f"[トークン数] 入力: {usage.prompt_token_count}, "
+                    f"出力: {usage.candidates_token_count}"
+                )
+            print(response.text)
+        except errors.APIError as e:
+            print(api_error_message(e.code, e.message))
 
 
 if __name__ == "__main__":
