@@ -5,10 +5,14 @@
 """
 
 import json
+from datetime import datetime, timezone
 from functools import cache
+from itertools import count
 from pathlib import Path
+import random
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+LEARNING_LOG_DIR = Path(__file__).resolve().parent.parent / "learning_log"
 MAX_RESULTS = 3
 
 
@@ -77,3 +81,51 @@ def get_lecture_summary(lecture: int) -> str:
         available = sorted(p.stem for p in (DATA_DIR / "lectures").glob("*.md"))
         return f"第{lecture}回の要点はまだありません。用意されている回: {', '.join(available)}"
     return path.read_text(encoding="utf-8")
+
+
+def save_learning_log(content: str) -> str:
+    """学習内容の記録を learning_log/ フォルダに Markdown として保存する。
+
+    ユーザーから学んだことや学習メモを記録するよう頼まれたときに使う。
+    content には保存する記録の本文をそのまま入れる。
+    """
+    if not content.strip():
+        return "保存する学習記録が空です。記録する内容を指定してください。"
+
+    LEARNING_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    for suffix in count():
+        suffix_text = f"-{suffix}" if suffix else ""
+        path = LEARNING_LOG_DIR / f"{timestamp}{suffix_text}.md"
+        try:
+            with path.open("x", encoding="utf-8") as f:
+                f.write(content)
+        except FileExistsError:
+            continue
+        return f"学習記録を {path.relative_to(LEARNING_LOG_DIR.parent)} に保存しました。"
+
+
+def make_quiz(lecture: int) -> str:
+    """指定した回の用語から 1つを選び、
+    確認問題と答えを返す。
+    「第2回の確認問題を出して」のように、
+    復習用の問題を求められたときに使う。
+    """
+    glossary = load_glossary()
+    q_terms = [t for t in glossary if t["lecture"] == lecture]
+    if not q_terms:
+        return json.dumps(
+            {
+                "error": f"第{lecture}回の用語データが見つかりませんでした。"
+            },
+            ensure_ascii=False,
+        )
+    q_term=random.choice(q_terms)
+    return json.dumps(
+        {
+            "question":f"「{q_term["term"]}」の意味は？",
+            "answer":f"{q_term["definition"]}"
+        },
+        ensure_ascii=False,
+    )
+
